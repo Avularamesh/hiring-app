@@ -1,47 +1,33 @@
 pipeline {
     agent any
 
-        environment {
-        IMAGE_TAG = "${BUILD_NUMBER}"
+    parameters {
+        string(name: 'BRANCH_NAME', defaultValue: 'main', description: 'Enter the branch to build')
+        choice(name: 'BUILD_TYPE', choices: ['Debug', 'Release'], description: 'Select the build type')
     }
 
     stages {
-        
-       
-        stage('Docker Build') {
+        stage('Clone Repository') {
             steps {
-                sh "docker build . -t sabair0509/hiring-app:$BUILD_NUMBER"
+                echo "Cloning the branch: ${params.BRANCH_NAME}"
+                git branch: "${params.BRANCH_NAME}", url: 'https://github.com/Avularamesh/hiring-app.git'
             }
         }
-        stage('Docker Push') {
+
+        stage('Build Project') {
             steps {
-                withCredentials([string(credentialsId: 'docker-hub', variable: 'hubPwd')]) {
-                    sh "docker login -u sabair0509 -p ${hubPwd}"
-                    sh "docker push sabair0509/hiring-app:$BUILD_NUMBER"
-                }
+                echo "Building in ${params.BUILD_TYPE} mode"
+                sh '''
+                    if [ "$BUILD_TYPE" = "Debug" ]; then
+                        echo "Running Debug Build..."
+                    else
+                        echo "Running Release Build..."
+                    fi
+
+                    # Call Maven
+                    mvn clean install
+                '''
             }
         }
-        stage('Checkout K8S manifest SCM'){
-            steps {
-              git branch: 'main', url: 'https://github.com/betawins/Hiring-app-argocd.git'
-            }
-        } 
-        stage('Update K8S manifest & push to Repo'){
-            steps {
-                script{
-                   withCredentials([usernamePassword(credentialsId: 'Github_server', passwordVariable: 'GIT_PASSWORD', usernameVariable: 'GIT_USERNAME')]) { 
-                        sh '''
-                        cat /var/lib/jenkins/workspace/$JOB_NAME/dev/deployment.yaml
-                        sed -i "s/5/${BUILD_NUMBER}/g" /var/lib/jenkins/workspace/$JOB_NAME/dev/deployment.yaml
-                        cat /var/lib/jenkins/workspace/$JOB_NAME/dev/deployment.yaml
-                        git add .
-                        git commit -m 'Updated the deploy yaml | Jenkins Pipeline'
-                        git remote -v
-                        git push https://$GIT_USERNAME:$GIT_PASSWORD@github.com/betawins/Hiring-app-argocd.git main
-                        '''                        
-                      }
-                  }
-            }   
-        }
-            }
-} 
+    }
+}
